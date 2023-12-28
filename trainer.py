@@ -94,15 +94,32 @@ def generate_training_data(input: GenerateTrainingDataInput):
             else:
                 outcome_score = env.get_outcome_score(outcome) / float(piece_value[chess.KING])
                 episode_target = -outcome_score if is_white else outcome_score
+
+                # Also include the position of outcome
+                outcome_state = state_3
+                outcome_add_state = torch.tensor(add_state_3.copy(), dtype=torch.float32)
+                outcome_target = torch.tensor([-episode_target], dtype=torch.float32)
+
+                episode_states.append(outcome_state)
+                episode_add_states.append(outcome_add_state)
+                episode_targets.append(outcome_target)
         else:
             outcome_score = env.get_outcome_score(outcome) / float(piece_value[chess.KING])
             # Since opponent did not make a move, we update for position before agent move state_1
             episode_state = state_1
             episode_add_state = add_state_1
             episode_target = outcome_score if is_white else -outcome_score
+
+            # Also include the position of outcome
+            outcome_state = state_2
+            outcome_add_state = torch.tensor(add_state_2.copy(), dtype=torch.float32)
+            outcome_target = torch.tensor([-episode_target], dtype=torch.float32)
+
+            episode_states.append(outcome_state)
+            episode_add_states.append(outcome_add_state)
+            episode_targets.append(outcome_target)
         
         episode_add_state = torch.tensor(episode_add_state.copy(), dtype=torch.float32)
-        episode_target = episode_target
         episode_target = torch.tensor([episode_target], dtype=torch.float32)
 
         episode_states.append(episode_state)
@@ -127,6 +144,7 @@ def do_training():
         logging.info(f'Epoch {epoch} Started')
         epoch_start = time.perf_counter()
         epoch_steps = 0
+        epoch_loss = 0
 
         excess_states = []
         excess_add_states = []
@@ -162,14 +180,14 @@ def do_training():
             excess_add_states = batch_add_states[constants.BATCH_SIZE:]
             excess_targets = batch_targets[constants.BATCH_SIZE:]
 
-            # Logging and accumulating iteration statistics
+            # Accumulating iteration statistics
             iteration_loss = loss.item()
-            logging.info(f'Iteration {iteration}, Loss {iteration_loss}')
 
+            epoch_loss += iteration_loss
             epoch_steps += len(batch_states_tensor)
         
         
-        logging.info(f'Epoch {epoch}, Steps {epoch_steps}, Took {time.perf_counter() - epoch_start}')
+        logging.info(f'Epoch {epoch}, Steps {epoch_steps}, Loss {epoch_loss / constants.ITERATIONS_PER_EPOCH} Took {time.perf_counter() - epoch_start}')
         epoch += 1
 
         # Save the model and log epoch statistics
