@@ -69,7 +69,9 @@ def generate_training_data(input: GenerateTrainingDataInput):
                 evaluation = agent.get_position_evaluation(state_2_inv, add_state_2_inv)
                 position_score = env.position_score if is_white else -env.position_score
                 position_score = position_score / float(piece_value[chess.KING])
-                episode_targets.append(alpha * position_score + (1 - alpha) * evaluation)
+                self_play_target = alpha * position_score + (1 - alpha) * evaluation
+                self_play_target = torch.tensor([self_play_target], dtype=torch.float32)
+                episode_targets.append(self_play_target)
 
             # Opponent makes move
             _, state_3, add_state_3, outcome = model_utilities.make_move(env, opponent)
