@@ -101,7 +101,7 @@ def save_model(model, version):
     torch.save(model.state_dict(), filename)
 
 def load_latest_model():
-    model = ChessAgent()
+    model = ChessAgent().to('cuda')
 
     files = os.listdir('models/.')
     if files:

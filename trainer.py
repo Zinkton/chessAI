@@ -14,7 +14,7 @@ from multithreading import multithreading_pool
 
 def generate_training_data_multiprocess(agent: ChessAgent, models, alpha):
     generate_training_data_inputs = []
-    for x in range(constants.THREADS * 4):
+    for x in range(constants.THREADS):
         agent_copy = model_utilities.copy_model(agent)
         env = ChessEnvironment()
         opponent = model_utilities.copy_model(model_utilities.load_model(models, agent.name)) if x > 5 else agent_copy
@@ -62,7 +62,8 @@ def generate_training_data(input: GenerateTrainingDataInput):
         if outcome is None:
             if self_play:
                 episode_states.append(state_1)
-                episode_add_states.append(add_state_1)
+                self_play_add_state = torch.tensor(add_state_1.copy(), dtype=torch.float32)
+                episode_add_states.append(self_play_add_state)
                 # We want to evaluate position from agent POV, so we invert
                 state_2_inv, add_state_2_inv  = env.invert(state_2, add_state_2)
                 evaluation = agent.get_position_evaluation(state_2_inv, add_state_2_inv)
@@ -141,9 +142,9 @@ def do_training():
                 batch_targets.extend(targets)
             
             # Convert batch data to tensors
-            batch_states_tensor = torch.stack(batch_states[:constants.BATCH_SIZE])
-            batch_add_states_tensor = torch.stack(batch_add_states[:constants.BATCH_SIZE])
-            batch_targets_tensor = torch.stack(batch_targets[:constants.BATCH_SIZE])
+            batch_states_tensor = torch.stack(batch_states[:constants.BATCH_SIZE]).to('cuda')
+            batch_add_states_tensor = torch.stack(batch_add_states[:constants.BATCH_SIZE]).to('cuda')
+            batch_targets_tensor = torch.stack(batch_targets[:constants.BATCH_SIZE]).to('cuda')
 
             # Perform training step
             optimizer.zero_grad()
