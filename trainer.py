@@ -13,8 +13,6 @@ from evaluation import piece_value
 from multithreading import multithreading_pool
 
 def generate_training_data_multiprocess(agent: ChessAgent, models, alpha):
-    start = time.perf_counter()
-
     generate_training_data_inputs = []
     for x in range(constants.THREADS * 4):
         agent_copy = model_utilities.copy_model(agent)
@@ -26,15 +24,6 @@ def generate_training_data_multiprocess(agent: ChessAgent, models, alpha):
     
     generated_data = multithreading_pool(generate_training_data, generate_training_data_inputs)
 
-
-    # filtered_states = []
-    # filtered_add_states = []
-    # filtered_episode_targets = []
-
-    # draw_states = []
-    # draw_add_states = []
-    # draw_episode_targets = []
-
     states = []
     add_states = []
     targets = []
@@ -43,24 +32,7 @@ def generate_training_data_multiprocess(agent: ChessAgent, models, alpha):
         states.extend(episode_states)
         add_states.extend(episode_add_states)
         targets.extend(episode_targets)
-    #     if is_checkmate:
-    #         filtered_states.extend(episode_states)
-    #         filtered_add_states.extend(episode_add_states)
-    #         filtered_episode_targets.extend(episode_targets)
-    #     else:
-    #         draw_states.extend(episode_states)
-    #         draw_add_states.extend(episode_add_states)
-    #         draw_episode_targets.extend(episode_targets)
 
-    # # Only 1 draw will suffice, I want to prioritize data with checkmates
-    # if draw_states:
-    #     filtered_states.append(draw_states[0])
-    #     filtered_add_states.append(draw_add_states[0])
-    #     filtered_episode_targets.append(draw_episode_targets[0])
-    # states, add_states, targets = zip(*[(lst1, lst2, lst3) for sublist in generated_data for (lst1, lst2, lst3, _) in sublist])
-
-    print(len(states) / (time.perf_counter() - start))
-    raise Exception(f'stop')
     return states, add_states, targets
 
 def generate_training_data(input: GenerateTrainingDataInput):
