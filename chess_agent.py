@@ -20,6 +20,10 @@ class ChessAgent(nn.Module):
         self.out = nn.Linear(64, 1)
 
     def forward(self, board, additional_inputs):
+        # Reshape the board input to [batch_size, channels, height, width]
+        # Assuming board is a flattened 8x8 board with 1 channel
+        board = board.view(-1, 1, 8, 8)  # Reshape to [batch_size, 1, 8, 8]
+
         # Process the board
         x_board = F.relu(self.conv1(board))
         x_board = F.relu(self.conv2(x_board))
@@ -38,8 +42,8 @@ class ChessAgent(nn.Module):
         
     def get_position_evaluation(self, board_state, additional_inputs):
         # Convert the board state to a tensor and run it through the network
-        state_tensor = board_state.unsqueeze(0)
-        additional_inputs_tensor = torch.FloatTensor(additional_inputs.copy()).unsqueeze(0).to("cuda")
+        state_tensor = board_state
+        additional_inputs_tensor = torch.FloatTensor(additional_inputs.copy()).unsqueeze(0)
         with torch.no_grad():  # Ensure no gradients are calculated
             return self.forward(state_tensor, additional_inputs_tensor).item()
         

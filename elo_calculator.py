@@ -2,7 +2,8 @@ from multiprocessing import Pool
 import os
 import model_utilities
 import constants
-from chess_agent import ChessAgent, load_model
+import multithreading
+from chess_agent import ChessAgent
 from chess_environment import ChessEnvironment
 
 class EloCalculator:
@@ -29,41 +30,16 @@ class EloCalculator:
         
 
     def _update_ratings(self, bot1, bot2, result):
-        bot1_new_rating = self.new_rating(bot1.rating, bot2.rating, result)
-        bot2_new_rating = self.new_rating(bot2.rating, bot1.rating, 1 - result)
+        bot1_new_rating = self.new_rating(self.elos.get(bot1.name, 0), self.elos.get(bot2.name, 0), result)
+        bot2_new_rating = self.new_rating(self.elos.get(bot2.name, 0), self.elos.get(bot1.name, 0), 1 - result)
         self.elos[bot1.name] = bot1_new_rating
         self.elos[bot2.name] = bot2_new_rating
     
     def _play_games_multithreaded(self, model, opponent):
-        play_game_input = [[model, opponent, ChessEnvironment(), bool(x % 2)] for x in range(constants.THREADS * 2)]
-        with Pool(processes=constants.THREADS) as p:
-            game_results = p.map(self.play_game, play_game_input)
+        play_game_inputs = [[model_utilities.copy_model(model), model_utilities.copy_model(opponent), ChessEnvironment(), bool(x % 2)] for x in range(constants.THREADS)]
+        game_results = multithreading.multithreading_pool(model_utilities.play_game, play_game_inputs)
         
         return game_results
-
-    def play_game(self, agent: ChessAgent, opponent: ChessAgent, env: ChessEnvironment, is_switch):
-        env.reset()
-
-        if is_switch:
-            bot1 = opponent
-            bot2 = agent
-        else:
-            bot1 = agent
-            bot2 = opponent
-
-        outcome = None
-        while outcome is None:
-            _, _, _, outcome  = model_utilities.make_move(env, bot1, True)
-            if not outcome:
-                _, _, _, outcome  = model_utilities.make_move(env, bot2, True)
-
-        # (1 if bot1 wins, 0 if bot2 wins, 0.5 for a draw)
-        game_result = env.get_game_result()
-        if is_switch:
-            game_result = 1 - game_result
-
-        return game_result
-
 
     def _get_opponents(self, agent_name, models):
         opponents = []
@@ -72,7 +48,7 @@ class EloCalculator:
         filtered_files = [str(file) for file in files if str(file) != agent_name]
         filtered_files = self._pick_evenly_spaced(filtered_files)
         for filename in filtered_files:
-            opponent = model_utilities.load_model(models, filename, self.elos)
+            opponent = model_utilities.load_model(models, filename)
             opponents.append(opponent)
         
         return opponents

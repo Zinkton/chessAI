@@ -1,0 +1,7 @@
+INFO:root:do_training Started
+INFO:root:Epoch 0 Started
+INFO:root:Epoch 0 Iteration 0 started
+INFO:root:Epoch 0, Iteration 0, Steps 1024, Loss 0.12505951523780823, Took 8.039182299999998
+INFO:root:Epoch 0, Steps 1024, Took 8.0393474
+INFO:root:Epoch 1 Started
+INFO:root:Epoch 1 Iteration 0 started

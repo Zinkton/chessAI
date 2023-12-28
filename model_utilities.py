@@ -4,6 +4,15 @@ import os
 from chess_agent import ChessAgent
 from chess_environment import ChessEnvironment
 
+def copy_model(model):
+    # Create a new instance
+    new_model = ChessAgent()
+    new_model
+    # Copy the weights from the original model to the new one
+    new_model.load_state_dict(model.state_dict())
+
+    return new_model
+
 def make_move(env: ChessEnvironment, model, is_deterministic = False):
     moves_evaluations = evaluate_moves(env, model)
 
@@ -43,7 +52,7 @@ def evaluate_moves(env: ChessEnvironment, model: ChessAgent):
     return moves_evaluations
 
 def softmax_selection(moves_evaluations):
-    evaluations = torch.tensor([item[1] for item in moves_evaluations]).to('cuda')
+    evaluations = torch.tensor([item[1] for item in moves_evaluations])
 
     # We want the moves with the lowest scores because it's from the opponent POV
     evaluations = evaluations.max() - evaluations
@@ -79,24 +88,25 @@ def pick_random_opponent(filenames):
 
 def save_model(model, version):
     filename = f"models/{version}"
+    model.name = str(version)
     torch.save(model.state_dict(), filename)
 
 def load_latest_model():
     model = ChessAgent()
+    model.to('cuda')
 
     files = os.listdir('models/.')
     if files:
         latest_model_file = str(max([int(filename) for filename in files]))
-        model.load_state_dict(torch.load(latest_model_file))
+        model.load_state_dict(torch.load(f'models/{latest_model_file}'))
         model.name = latest_model_file
     else:
         model.name = '0'
-
-    model.to("cuda")
+        save_model(model, 0)
 
     return model
 
-def load_model(models, filename = None, elos = None):
+def load_model(models, filename = None):
     model = ChessAgent()
 
     if filename is None:
@@ -104,30 +114,31 @@ def load_model(models, filename = None, elos = None):
         if not files:
             model.name = '0'
             models['0'] = model
-            model.to("cuda")
             model.eval()
 
             return model
-            
-        # Pick random opponent, favoring latest models
-        filename = pick_random_opponent(files)
+        
+        if len(files) == 1:
+            filename = files[0]
+        else:
+            # Pick random opponent, favoring latest models
+            filename = pick_random_opponent(files)
+        
         if filename in models:
             return models[filename]
-        
     
-    model.load_state_dict(torch.load(filename))
+    model.load_state_dict(torch.load(f'models/{filename}'))
     model.name = filename
     models[filename] = model
-    model.to("cuda")
     model.eval()
-
-    if elos:
-        model.elo = elos[filename]
 
     return model
 
 def load_ratings():
     ratings = {}
+    if not os.path.exists('elos.txt'):
+        return ratings
+    
     with open('elos.txt', 'r+') as file:
         for line in file:
             name, elo = line.strip().split(' ')
@@ -140,3 +151,31 @@ def save_ratings(elos):
     with open('elos.txt', 'w') as file:
         for key in elos:
             file.write(f"{key} {elos[key]}\n")
+
+def play_game(input):
+    agent: ChessAgent = input[0]
+    opponent: ChessAgent = input[1]
+    env: ChessEnvironment = input[2]
+    is_switch = input[3]
+
+    env.reset()
+
+    if is_switch:
+        bot1 = opponent
+        bot2 = agent
+    else:
+        bot1 = agent
+        bot2 = opponent
+
+    outcome = None
+    while outcome is None:
+        _, _, _, outcome  = make_move(env, bot1, True)
+        if not outcome:
+            _, _, _, outcome  = make_move(env, bot2, True)
+
+    # (1 if bot1 wins, 0 if bot2 wins, 0.5 for a draw)
+    game_result = env.get_game_result()
+    if is_switch:
+        game_result = 1 - game_result
+
+    return game_result

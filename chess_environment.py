@@ -20,7 +20,7 @@ class ChessEnvironment:
         Converts the board state to a numerical format that can be used as input to the neural network.
         """
         # Initialize a PyTorch tensor for the board state
-        board_state = torch.zeros(64, dtype=torch.float32).to('cuda')
+        board_state = torch.zeros(64, dtype=torch.float32)
 
         # Populate the tensor based on the board
         for i in range(64):
