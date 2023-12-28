@@ -131,15 +131,10 @@ def do_training():
         excess_add_states = []
         excess_targets = []
 
-        batch_states = excess_states.copy()
-        batch_add_states = excess_add_states.copy()
-        batch_targets = excess_targets.copy()
-
-        for iteration in range(constants.ITERATIONS_PER_EPOCH):
-            logging.info(f'Epoch {epoch} Iteration {iteration} started')
-            start = time.perf_counter()
-            iteration_steps = 0
-            iteration_loss = 0
+        for iteration in range(constants.ITERATIONS_PER_EPOCH):            
+            batch_states = excess_states.copy()
+            batch_add_states = excess_add_states.copy()
+            batch_targets = excess_targets.copy()
 
             while len(batch_states) < constants.BATCH_SIZE:
                 states, add_states, targets = generate_training_data_multiprocess(agent, models, constants.ALPHA)
@@ -149,7 +144,6 @@ def do_training():
                 batch_add_states.extend(add_states)
                 batch_targets.extend(targets)
             
-            training_start = time.perf_counter()
             # Convert batch data to tensors
             batch_states_tensor = torch.stack(batch_states[:constants.BATCH_SIZE]).to('cuda')
             batch_add_states_tensor = torch.stack(batch_add_states[:constants.BATCH_SIZE]).to('cuda')
@@ -161,7 +155,6 @@ def do_training():
             loss = loss_function(outputs, batch_targets_tensor)
             loss.backward()
             optimizer.step()
-            print(time.perf_counter() - training_start)
 
             # Save excess data for the next iteration
             excess_states = batch_states[constants.BATCH_SIZE:]
@@ -170,10 +163,9 @@ def do_training():
 
             # Logging and accumulating iteration statistics
             iteration_loss = loss.item()
-            iteration_steps = len(batch_states_tensor)
-            logging.info(f'Epoch {epoch}, Iteration {iteration}, Steps {iteration_steps}, Loss {iteration_loss}, Took {time.perf_counter() - start}')
+            logging.info(f'Iteration {iteration}, Loss {iteration_loss}')
 
-            epoch_steps += iteration_steps
+            epoch_steps += len(batch_states_tensor)
         
         
         logging.info(f'Epoch {epoch}, Steps {epoch_steps}, Took {time.perf_counter() - epoch_start}')
