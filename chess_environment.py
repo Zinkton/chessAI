@@ -14,7 +14,7 @@ class ChessEnvironment:
         self.board.reset()
         self.position_score = 0
         return self.get_board_state()
-
+    
     def get_board_state(self):
         """
         Converts the board state to a numerical format that can be used as input to the neural network.

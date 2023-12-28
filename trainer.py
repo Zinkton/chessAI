@@ -13,8 +13,19 @@ from evaluation import piece_value
 from multithreading import multithreading_pool
 
 def generate_training_data_multiprocess(agent: ChessAgent, models, alpha):
-    generate_training_data_inputs = [GenerateTrainingDataInput(model_utilities.copy_model(agent), ChessEnvironment(), model_utilities.copy_model(model_utilities.load_model(models)), bool(x % 2), alpha) for x in range(constants.THREADS)]
+    start = time.perf_counter()
+
+    generate_training_data_inputs = []
+    for x in range(constants.THREADS * 4):
+        agent_copy = model_utilities.copy_model(agent)
+        env = ChessEnvironment()
+        opponent = model_utilities.copy_model(model_utilities.load_model(models, agent.name)) if x > 5 else agent_copy
+        is_white = bool(x % 2)
+        generate_training_data_inputs.append(GenerateTrainingDataInput(agent_copy, env, opponent, is_white, alpha))
+
+    
     generated_data = multithreading_pool(generate_training_data, generate_training_data_inputs)
+
 
     # filtered_states = []
     # filtered_add_states = []
@@ -48,10 +59,13 @@ def generate_training_data_multiprocess(agent: ChessAgent, models, alpha):
     #     filtered_episode_targets.append(draw_episode_targets[0])
     # states, add_states, targets = zip(*[(lst1, lst2, lst3) for sublist in generated_data for (lst1, lst2, lst3, _) in sublist])
 
+    print(len(states) / (time.perf_counter() - start))
+    raise Exception(f'stop')
     return states, add_states, targets
 
 def generate_training_data(input: GenerateTrainingDataInput):
     (agent, env, opponent, is_white, alpha) = (input.agent, input.env, input.opponent, input.is_white, input.alpha)
+    self_play = agent is opponent
     episode_states = []
     episode_add_states = []
     episode_targets = []
@@ -74,6 +88,16 @@ def generate_training_data(input: GenerateTrainingDataInput):
 
         # ANALYZE CAREFULLY WITH SOBER BRAIN
         if outcome is None:
+            if self_play:
+                episode_states.append(state_1)
+                episode_add_states.append(add_state_1)
+                # We want to evaluate position from agent POV, so we invert
+                state_2_inv, add_state_2_inv  = env.invert(state_2, add_state_2)
+                evaluation = agent.get_position_evaluation(state_2_inv, add_state_2_inv)
+                position_score = env.position_score if is_white else -env.position_score
+                position_score = position_score / float(piece_value[chess.KING])
+                episode_targets.append(alpha * position_score + (1 - alpha) * evaluation)
+
             # Opponent makes move
             _, state_3, add_state_3, outcome = model_utilities.make_move(env, opponent)
             # Since opponent made a move, we reevaluate the position and update for position before enemy move state_2
@@ -100,9 +124,9 @@ def generate_training_data(input: GenerateTrainingDataInput):
             episode_add_state = add_state_1
             episode_target = outcome_score if is_white else -outcome_score
         
-        episode_add_state = torch.FloatTensor(episode_add_state.copy())
+        episode_add_state = torch.tensor(episode_add_state.copy(), dtype=torch.float32)
         episode_target = episode_target
-        episode_target = torch.FloatTensor([episode_target])
+        episode_target = torch.tensor([episode_target], dtype=torch.float32)
 
         episode_states.append(episode_state)
         episode_add_states.append(episode_add_state)
@@ -145,9 +169,9 @@ def do_training():
                 batch_targets.extend(targets)
             
             # Convert batch data to tensors
-            batch_states_tensor = torch.stack(batch_states[:constants.BATCH_SIZE]).to('cuda')
-            batch_add_states_tensor = torch.stack(batch_add_states[:constants.BATCH_SIZE]).to('cuda')
-            batch_targets_tensor = torch.stack(batch_targets[:constants.BATCH_SIZE]).to('cuda')
+            batch_states_tensor = torch.stack(batch_states[:constants.BATCH_SIZE])
+            batch_add_states_tensor = torch.stack(batch_add_states[:constants.BATCH_SIZE])
+            batch_targets_tensor = torch.stack(batch_targets[:constants.BATCH_SIZE])
 
             # Perform training step
             optimizer.zero_grad()
@@ -176,5 +200,16 @@ def do_training():
         model_utilities.save_model(agent, epoch)
         elo_calculator.calculate_elo(agent, models)
 
+def measure_performance():
+    agent = model_utilities.load_latest_model()
+    agent_copy = model_utilities.copy_model(agent)
+    env = ChessEnvironment()
+    opponent = model_utilities.copy_model(agent)
+    alpha = constants.ALPHA
+    input = GenerateTrainingDataInput(agent_copy, env, opponent, True, alpha)
+    generate_training_data(input)
+
 if __name__ == '__main__':
+    torch.set_default_device('cpu')
     do_training()
+    #measure_performance()

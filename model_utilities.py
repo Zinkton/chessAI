@@ -7,7 +7,7 @@ from chess_environment import ChessEnvironment
 def copy_model(model):
     # Create a new instance
     new_model = ChessAgent()
-    new_model
+    new_model.eval()
     # Copy the weights from the original model to the new one
     new_model.load_state_dict(model.state_dict())
 
@@ -41,18 +41,27 @@ def print_8x8_tensor(tensor):
 
 def evaluate_moves(env: ChessEnvironment, model: ChessAgent):
     moves_evaluations = []
+    states, add_states = [], []
     for move in env.board.legal_moves:
         env.board.push(move)
         board_state, additional_state = env.get_board_state()
         board_state, additional_state = env.invert(board_state, additional_state)
-        evaluation = model.get_position_evaluation(board_state, additional_state)
-        moves_evaluations.append([move, evaluation, board_state, additional_state])
+        
+        additional_state_tensor = torch.tensor(additional_state.copy(), dtype=torch.float32)
+        
+        states.append(board_state)
+        add_states.append(additional_state_tensor)
+        moves_evaluations.append([move, 0, board_state, additional_state])
         env.board.pop()
+
+    evaluations = model.get_multiple_position_evaluations(states, add_states)
+    for x in range(len(evaluations)):
+        moves_evaluations[x][1] = evaluations[x]
 
     return moves_evaluations
 
 def softmax_selection(moves_evaluations):
-    evaluations = torch.tensor([item[1] for item in moves_evaluations])
+    evaluations = torch.tensor([item[1] for item in moves_evaluations], dtype=torch.float32)
 
     # We want the moves with the lowest scores because it's from the opponent POV
     evaluations = evaluations.max() - evaluations
@@ -93,7 +102,6 @@ def save_model(model, version):
 
 def load_latest_model():
     model = ChessAgent()
-    model.to('cuda')
 
     files = os.listdir('models/.')
     if files:
@@ -106,11 +114,12 @@ def load_latest_model():
 
     return model
 
-def load_model(models, filename = None):
+def load_model(models, filename = None, agent_name = None):
     model = ChessAgent()
 
     if filename is None:
         files = os.listdir('models/.')
+        files = [file for file in files if str(file) != agent_name]
         if not files:
             model.name = '0'
             models['0'] = model

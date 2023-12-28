@@ -39,11 +39,19 @@ class ChessAgent(nn.Module):
         x_combined = F.relu(self.fc2(x_combined))
         x_combined = self.out(x_combined)
         return x_combined
-        
+
     def get_position_evaluation(self, board_state, additional_inputs):
         # Convert the board state to a tensor and run it through the network
-        state_tensor = board_state
-        additional_inputs_tensor = torch.FloatTensor(additional_inputs.copy()).unsqueeze(0)
+        additional_inputs_tensor = torch.tensor(additional_inputs.copy(), dtype=torch.float32).unsqueeze(0)
         with torch.no_grad():  # Ensure no gradients are calculated
-            return self.forward(state_tensor, additional_inputs_tensor).item()
+            return self.forward(board_state, additional_inputs_tensor).item()
+        
+    def get_multiple_position_evaluations(self, board_states, additional_inputs):
+        states_tensor = torch.stack(board_states)
+        add_states_tensor = torch.stack(additional_inputs)
+
+        with torch.no_grad():  # Ensure no gradients are calculated
+            result = self.forward(states_tensor, add_states_tensor).tolist()
+        
+            return result
         
