@@ -55,6 +55,9 @@ def generate_training_data(input: GenerateTrainingDataInput):
         episode_add_state = None
         episode_target = None
 
+        position_score = env.position_score if is_white else -env.position_score
+        position_score = position_score / float(piece_value[chess.KING])
+
         # Make a move and get a new state
         _, state_2, add_state_2, outcome = model_utilities.make_move(env, agent)
 
@@ -67,24 +70,23 @@ def generate_training_data(input: GenerateTrainingDataInput):
                 # We want to evaluate position from agent POV, so we invert
                 state_2_inv, add_state_2_inv  = env.invert(state_2, add_state_2)
                 evaluation = agent.get_position_evaluation(state_2_inv, add_state_2_inv)
-                position_score = env.position_score if is_white else -env.position_score
-                position_score = position_score / float(piece_value[chess.KING])
                 self_play_target = alpha * position_score + (1 - alpha) * evaluation
                 self_play_target = torch.tensor([self_play_target], dtype=torch.float32)
                 episode_targets.append(self_play_target)
 
-            # Opponent makes move
-            _, state_3, add_state_3, outcome = model_utilities.make_move(env, opponent)
-            # Since opponent made a move, we reevaluate the position and update for position before enemy move state_2
             episode_state = state_2
             episode_add_state = add_state_2
+            # From opponent point of view, so score is opposite sign if agent is white
+            position_score = -env.position_score if is_white else env.position_score
+            position_score = position_score / float(piece_value[chess.KING])
+            # Opponent makes move
+            _, state_3, add_state_3, outcome = model_utilities.make_move(env, opponent)
+            
             if outcome is None:
                 # We want to evaluate position from opponent POV, so we invert
                 state_3_inv, add_state_3_inv  = env.invert(state_3, add_state_3)
                 evaluation = agent.get_position_evaluation(state_3_inv.unsqueeze(0), add_state_3_inv)
-                # From opponent point of view, so score is opposite sign if agent is white
-                position_score = -env.position_score if is_white else env.position_score
-                position_score = position_score / float(piece_value[chess.KING])
+                
                 episode_target = alpha * position_score + (1 - alpha) * evaluation
 
                 state_1 = state_3
