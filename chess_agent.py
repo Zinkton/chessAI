@@ -37,7 +37,6 @@ class ChessAgent(nn.Module):
         # Combine and process further
         x_combined = torch.cat((x_board, x_additional), dim=1)
         x_combined = F.relu(self.fc2(x_combined))
-        x_combined = self.out(x_combined)
 
         # Output layer with tanh activation for output range of [-1, 1]
         x_combined = torch.tanh(self.out(x_combined))
