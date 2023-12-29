@@ -34,8 +34,6 @@ def generate_training_data_multiprocess(agent: ChessAgent, models, alpha):
         add_states.extend(episode_add_states)
         targets.extend(episode_targets)
 
-    raise Exception("stop here")
-
     return states, add_states, targets
 
 def generate_training_data(input: GenerateTrainingDataInput):
@@ -151,8 +149,8 @@ def generate_training_data(input: GenerateTrainingDataInput):
         final_episode_add_states.append(bonus_episode_add_state)
         final_episode_add_states.append(torch.tensor(episode_add_states[x], dtype=torch.float32))
 
-        final_episode_targets.append(bonus_episode_target)
-        final_episode_targets.append(episode_targets[x])
+        final_episode_targets.append(torch.tensor([bonus_episode_target], dtype=torch.float32))
+        final_episode_targets.append(torch.tensor([episode_targets[x]], dtype=torch.float32))
 
     return final_episode_states, final_episode_add_states, final_episode_targets, is_checkmate
 
@@ -162,7 +160,7 @@ def do_training():
     elo_calculator = EloCalculator()
     models = {}
     agent = model_utilities.load_latest_model()
-    optimizer = optim.Adam(agent.parameters(), lr=0.001)
+    optimizer = optim.Adam(agent.parameters(), lr=constants.LEARNING_RATE)
     loss_function = torch.nn.MSELoss()
     
     epoch = int(agent.name)
@@ -188,13 +186,13 @@ def do_training():
             # Convert batch data to tensors
             batch_states_tensor = torch.stack(batch_states[:constants.BATCH_SIZE]).to('cuda')
             batch_add_states_tensor = torch.stack(batch_add_states[:constants.BATCH_SIZE]).to('cuda')
-            batch_targets_tensor = torch.tensor(batch_targets[:constants.BATCH_SIZE], dtype=torch.float32).to('cuda')
+            batch_targets_tensor = torch.stack(batch_targets[:constants.BATCH_SIZE]).to('cuda')
 
             # Create a TensorDataset
             dataset = TensorDataset(batch_states_tensor, batch_add_states_tensor, batch_targets_tensor)
 
             # Create a DataLoader
-            data_loader = DataLoader(dataset, batch_size=constants.BATCH_SIZE, shuffle=True)
+            data_loader = DataLoader(dataset, batch_size=constants.MINIBATCH_SIZE, shuffle=True)
 
             for batch_states_tensor, batch_add_states_tensor, batch_targets_tensor in data_loader:
                 # Perform training step
@@ -228,7 +226,7 @@ def measure_performance():
     input = GenerateTrainingDataInput(agent_copy, env, opponent, True, alpha)
     total_steps = 0
     generate_training_data_inputs = []
-    
+
     for x in range(constants.THREADS):
         agent_copy = model_utilities.copy_model(agent)
         env = ChessEnvironment()
@@ -244,14 +242,15 @@ def measure_performance():
 
     start = time.perf_counter()
     generated_data = multithreading_pool(generate_training_data, generate_training_data_inputs)
-    print(total_steps / (time.perf_counter() - start))
-
-
+    total_data = []
+    for item, _, _, _ in generated_data:
+        total_data.extend(item)
+    print(len(total_data) / (time.perf_counter() - start))
 
 if __name__ == '__main__':
     torch.set_default_device('cpu')
-    #do_training()
-    measure_performance()
+    do_training()
+    # measure_performance()
     # env = ChessEnvironment()
     # state, add_state = env.get_board_state(), env.get_additional_state()
     # env.render()

@@ -39,6 +39,7 @@ def print_8x8_tensor(tensor):
     for row in tensor_8x8:
         print(' '.join(f'{value*6:.0f}' for value in row.tolist()))
 
+
 def evaluate_moves(env: ChessEnvironment, model: ChessAgent, state):
     moves_evaluations = []
     states, add_states = [], []
