@@ -7,7 +7,7 @@ piece_value = {
     chess.BISHOP: 320,
     chess.ROOK: 479,
     chess.QUEEN: 929,
-    chess.KING: 2000
+    chess.KING: 4000
 }
 
 # Position tables for each piece type

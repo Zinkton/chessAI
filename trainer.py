@@ -1,4 +1,5 @@
 import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
 from chess_agent import ChessAgent
 from chess_environment import ChessEnvironment
 import time
@@ -33,6 +34,8 @@ def generate_training_data_multiprocess(agent: ChessAgent, models, alpha):
         add_states.extend(episode_add_states)
         targets.extend(episode_targets)
 
+    raise Exception("stop here")
+
     return states, add_states, targets
 
 def generate_training_data(input: GenerateTrainingDataInput):
@@ -48,7 +51,7 @@ def generate_training_data(input: GenerateTrainingDataInput):
     
     # Opponent is white and makes first move
     if not is_white:
-        _, state_1, add_state_1, outcome = model_utilities.make_move(env, opponent)
+        _, state_1, add_state_1, outcome = model_utilities.make_move(env, opponent, state_1.clone(), is_deterministic = not self_play)
     
     while outcome is None:
         episode_state = None
@@ -59,19 +62,18 @@ def generate_training_data(input: GenerateTrainingDataInput):
         position_score = position_score / float(piece_value[chess.KING])
 
         # Make a move and get a new state
-        _, state_2, add_state_2, outcome = model_utilities.make_move(env, agent)
+        state_2_eval, state_2, add_state_2, outcome = model_utilities.make_move(env, agent, state_1.clone())
 
         # ANALYZE CAREFULLY WITH SOBER BRAIN
         if outcome is None:
             if self_play:
+                # We can use state_1 as training data now, because it's self play
                 episode_states.append(state_1)
-                self_play_add_state = torch.tensor(add_state_1.copy(), dtype=torch.float32)
+                self_play_add_state = add_state_1.copy()
                 episode_add_states.append(self_play_add_state)
-                # We want to evaluate position from agent POV, so we invert
-                state_2_inv, add_state_2_inv  = env.invert(state_2, add_state_2)
-                evaluation = agent.get_position_evaluation(state_2_inv, add_state_2_inv)
-                self_play_target = alpha * position_score + (1 - alpha) * evaluation
-                self_play_target = torch.tensor([self_play_target], dtype=torch.float32)
+                # The evaluation of the position is just the evaluation after the move with opposite sign
+                evaluation = state_2_eval[1] * -1.0
+                self_play_target = alpha * position_score + (1.0 - alpha) * evaluation
                 episode_targets.append(self_play_target)
 
             episode_state = state_2
@@ -80,14 +82,18 @@ def generate_training_data(input: GenerateTrainingDataInput):
             position_score = -env.position_score if is_white else env.position_score
             position_score = position_score / float(piece_value[chess.KING])
             # Opponent makes move
-            _, state_3, add_state_3, outcome = model_utilities.make_move(env, opponent)
+            state_3_eval, state_3, add_state_3, outcome = model_utilities.make_move(env, opponent, state_2.clone(), is_deterministic = not self_play)
             
             if outcome is None:
+                evaluation = None
                 # We want to evaluate position from opponent POV, so we invert
-                state_3_inv, add_state_3_inv  = env.invert(state_3, add_state_3)
-                evaluation = agent.get_position_evaluation(state_3_inv.unsqueeze(0), add_state_3_inv)
+                if self_play:
+                    evaluation = state_3_eval[1] * -1
+                else:
+                    state_3_inv, add_state_3_inv  = env.invert_state(state_3), env.invert_additional_state(add_state_3)
+                    evaluation = agent.get_position_evaluation(state_3_inv.unsqueeze(0), add_state_3_inv)
                 
-                episode_target = alpha * position_score + (1 - alpha) * evaluation
+                episode_target = alpha * position_score + (1.0 - alpha) * evaluation
 
                 state_1 = state_3
                 add_state_1 = add_state_3
@@ -97,8 +103,8 @@ def generate_training_data(input: GenerateTrainingDataInput):
 
                 # Also include the position of outcome
                 outcome_state = state_3
-                outcome_add_state = torch.tensor(add_state_3.copy(), dtype=torch.float32)
-                outcome_target = torch.tensor([-episode_target], dtype=torch.float32)
+                outcome_add_state = add_state_3.copy()
+                outcome_target = -episode_target
 
                 episode_states.append(outcome_state)
                 episode_add_states.append(outcome_add_state)
@@ -112,23 +118,43 @@ def generate_training_data(input: GenerateTrainingDataInput):
 
             # Also include the position of outcome
             outcome_state = state_2
-            outcome_add_state = torch.tensor(add_state_2.copy(), dtype=torch.float32)
-            outcome_target = torch.tensor([-episode_target], dtype=torch.float32)
+            outcome_add_state = add_state_2.copy()
+            outcome_target = -episode_target
 
             episode_states.append(outcome_state)
             episode_add_states.append(outcome_add_state)
             episode_targets.append(outcome_target)
         
-        episode_add_state = torch.tensor(episode_add_state.copy(), dtype=torch.float32)
-        episode_target = torch.tensor([episode_target], dtype=torch.float32)
+        episode_add_state = episode_add_state.copy()
+        episode_target = episode_target
 
         episode_states.append(episode_state)
         episode_add_states.append(episode_add_state)
         episode_targets.append(episode_target)
     
+    # A mark if the episode was ended with a checkmate, for possible data filtering in the future
     is_checkmate = outcome.termination == chess.Termination.CHECKMATE
 
-    return episode_states, episode_add_states, episode_targets, is_checkmate
+    # We can double training data by inverting the states and changing the sign of the target
+    # We also convert the data to tensors
+    final_episode_states = []
+    final_episode_add_states = []
+    final_episode_targets = []
+    for x in range(len(episode_states)):
+        bonus_episode_state = env.invert_state(episode_states[x])
+        bonus_episode_add_state = torch.tensor(env.invert_additional_state(episode_add_states[x]), dtype=torch.float32)
+        bonus_episode_target = -episode_targets[x]
+
+        final_episode_states.append(bonus_episode_state)
+        final_episode_states.append(episode_states[x])
+
+        final_episode_add_states.append(bonus_episode_add_state)
+        final_episode_add_states.append(torch.tensor(episode_add_states[x], dtype=torch.float32))
+
+        final_episode_targets.append(bonus_episode_target)
+        final_episode_targets.append(episode_targets[x])
+
+    return final_episode_states, final_episode_add_states, final_episode_targets, is_checkmate
 
 def do_training():
     logging.basicConfig(filename='logs.log', level=logging.DEBUG)
@@ -146,14 +172,10 @@ def do_training():
         epoch_steps = 0
         epoch_loss = 0
 
-        excess_states = []
-        excess_add_states = []
-        excess_targets = []
-
-        for iteration in range(constants.ITERATIONS_PER_EPOCH):            
-            batch_states = excess_states.copy()
-            batch_add_states = excess_add_states.copy()
-            batch_targets = excess_targets.copy()
+        for iteration in range(constants.ITERATIONS_PER_EPOCH):
+            batch_states = []
+            batch_add_states = []
+            batch_targets = []
 
             while len(batch_states) < constants.BATCH_SIZE:
                 states, add_states, targets = generate_training_data_multiprocess(agent, models, constants.ALPHA)
@@ -166,28 +188,30 @@ def do_training():
             # Convert batch data to tensors
             batch_states_tensor = torch.stack(batch_states[:constants.BATCH_SIZE]).to('cuda')
             batch_add_states_tensor = torch.stack(batch_add_states[:constants.BATCH_SIZE]).to('cuda')
-            batch_targets_tensor = torch.stack(batch_targets[:constants.BATCH_SIZE]).to('cuda')
+            batch_targets_tensor = torch.tensor(batch_targets[:constants.BATCH_SIZE], dtype=torch.float32).to('cuda')
 
-            # Perform training step
-            optimizer.zero_grad()
-            outputs = agent(batch_states_tensor, batch_add_states_tensor)
-            loss = loss_function(outputs, batch_targets_tensor)
-            loss.backward()
-            optimizer.step()
+            # Create a TensorDataset
+            dataset = TensorDataset(batch_states_tensor, batch_add_states_tensor, batch_targets_tensor)
 
-            # Save excess data for the next iteration
-            excess_states = batch_states[constants.BATCH_SIZE:]
-            excess_add_states = batch_add_states[constants.BATCH_SIZE:]
-            excess_targets = batch_targets[constants.BATCH_SIZE:]
+            # Create a DataLoader
+            data_loader = DataLoader(dataset, batch_size=constants.BATCH_SIZE, shuffle=True)
 
-            # Accumulating iteration statistics
-            iteration_loss = loss.item()
+            for batch_states_tensor, batch_add_states_tensor, batch_targets_tensor in data_loader:
+                # Perform training step
+                optimizer.zero_grad()
+                outputs = agent(batch_states_tensor, batch_add_states_tensor)
+                loss = loss_function(outputs, batch_targets_tensor)
+                loss.backward()
+                optimizer.step()
 
-            epoch_loss += iteration_loss
-            epoch_steps += len(batch_states_tensor)
+                # Accumulating iteration statistics
+                iteration_loss = loss.item()
+
+                epoch_loss += iteration_loss
+                epoch_steps += len(batch_states_tensor)
         
         
-        logging.info(f'Epoch {epoch}, Steps {epoch_steps}, Loss {epoch_loss / constants.ITERATIONS_PER_EPOCH} Took {time.perf_counter() - epoch_start}')
+        logging.info(f'Epoch {epoch}, Steps per second: {epoch_steps / (time.perf_counter() - epoch_start) }, Loss {epoch_loss / constants.ITERATIONS_PER_EPOCH}')
         epoch += 1
 
         # Save the model and log epoch statistics
@@ -202,9 +226,44 @@ def measure_performance():
     opponent = model_utilities.copy_model(agent)
     alpha = constants.ALPHA
     input = GenerateTrainingDataInput(agent_copy, env, opponent, True, alpha)
-    generate_training_data(input)
+    total_steps = 0
+    generate_training_data_inputs = []
+    for x in range(constants.THREADS):
+        agent_copy = model_utilities.copy_model(agent)
+        env = ChessEnvironment()
+        opponent = model_utilities.copy_model(model_utilities.load_model({}, agent.name)) if x > 5 else agent_copy
+        is_white = bool(x % 2)
+        generate_training_data_inputs.append(GenerateTrainingDataInput(agent_copy, env, opponent, is_white, alpha))
+
+    
+    
+    start = time.perf_counter()
+    for input in generate_training_data_inputs:
+        results, _, _, _ = generate_training_data(input)
+        total_steps += len(results)
+    print(total_steps / (time.perf_counter() - start))
+
+    start = time.perf_counter()
+    generated_data = multithreading_pool(generate_training_data, generate_training_data_inputs)
+    print(total_steps / (time.perf_counter() - start))
+
+
 
 if __name__ == '__main__':
     torch.set_default_device('cpu')
-    do_training()
-    #measure_performance()
+    #do_training()
+    measure_performance()
+    # env = ChessEnvironment()
+    # state, add_state = env.get_board_state(), env.get_additional_state()
+    # env.render()
+    # model_utilities.print_8x8_tensor(state)
+    # agent = ChessAgent()
+    # selected_move, state, _, _ = model_utilities.make_move(env, agent, state, True)
+    # print(f'move {selected_move[0]}, from_square: {selected_move[0].from_square}, to_square: {selected_move[0].to_square}')
+    # env.render()
+    # model_utilities.print_8x8_tensor(state)
+    # selected_move, state, _, _ = model_utilities.make_move(env, agent, state, True)
+    # print(f'move {selected_move[0]}, from_square: {selected_move[0].from_square}, to_square: {selected_move[0].to_square}')
+    # env.render()
+    # model_utilities.print_8x8_tensor(state)
+    

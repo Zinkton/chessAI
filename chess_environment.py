@@ -4,8 +4,23 @@ import evaluation
 from evaluation import piece_value, position_value
 
 class ChessEnvironment:
-    def __init__(self):
-        self.board = chess.Board()
+    def __init__(self, fen = chess.Board.starting_fen):
+        self.board = chess.Board(fen)
+        self.position_score = 0
+
+    def print_8x8_tensor(self, tensor):
+        """
+        Prints an 8x8 space-separated representation of a 64-value torch float tensor.
+        Assumes the tensor is 1D with 64 elements.
+        """
+        if tensor.numel() != 64:
+            raise ValueError("Tensor must have exactly 64 elements.")
+
+        # Reshape tensor to 8x8 for printing
+        tensor_8x8 = tensor.view(8, 8)
+
+        for row in tensor_8x8:
+            print(' '.join(f'{value*6:.0f}' for value in row.tolist()))
 
     def reset(self):
         """
@@ -13,8 +28,73 @@ class ChessEnvironment:
         """
         self.board.reset()
         self.position_score = 0
-        return self.get_board_state()
+        return self.get_board_state(), self.get_additional_state()
     
+    def _check_castling(self, move, board_state):
+        if self.board.kings & chess.BB_SQUARES[move.from_square]:
+            diff = chess.square_file(move.from_square) - chess.square_file(move.to_square)
+            if abs(diff) > 1:
+                is_king_castling = diff < 0
+                k_index = 4
+                k_target = None
+                r_target = None
+                r_index = None
+                if is_king_castling:
+                    r_index = 7
+                    r_target = 5
+                    k_target = 6
+                else:
+                    r_index = 0
+                    r_target = 3
+                    k_target = 2
+
+                #board_state[k_index], board_state[r_index], board_state[k_target], board_state[r_target] = board_state[k_target], board_state[r_target], board_state[k_index], board_state[r_index]
+                # Performing swap with temporary variables
+                temp_k = board_state[k_index].clone()
+                temp_r = board_state[r_index].clone()
+
+                board_state[k_index] = board_state[k_target]
+                board_state[r_index] = board_state[r_target]
+
+                board_state[k_target] = temp_k
+                board_state[r_target] = temp_r
+
+                return True
+            
+        return False
+    
+    def _check_promotion(self, move: chess.Move, board_state):
+        if move.promotion:
+            board_state[move.from_square] = 0.0
+            board_state[move.to_square] = move.promotion / 6.0 if self.board.turn else -move.promotion / 6.0
+            
+            return True
+        
+        return False
+    
+    def get_additional_state(self):
+        # Get additional state information and convert to tensor
+        ep = -1.0
+        if self.board.ep_square is not None:
+            ep = self.board.ep_square
+            if 16 <= ep <= 23:
+                ep = ep - 16
+            elif 40 <= ep <= 47:
+                ep = ep - 40
+            ep = ep / 7.0
+        w_k_castling = float(self.board.has_kingside_castling_rights(chess.WHITE))
+        b_k_castling = float(self.board.has_kingside_castling_rights(chess.BLACK))
+        w_q_castling = float(self.board.has_queenside_castling_rights(chess.WHITE))
+        b_q_castling = float(self.board.has_queenside_castling_rights(chess.BLACK))
+        additional_state = [ep, w_k_castling, b_k_castling, w_q_castling, b_q_castling, self.board.halfmove_clock / 100.0]
+
+        return additional_state
+
+    def _move_piece_on_state(self, board_state, move: chess.Move):
+        if not self._check_promotion(move, board_state):
+            board_state[move.to_square] = board_state[move.from_square]
+            board_state[move.from_square] = 0.0
+
     def get_board_state(self):
         """
         Converts the board state to a numerical format that can be used as input to the neural network.
@@ -26,34 +106,20 @@ class ChessEnvironment:
         for i in range(64):
             piece = self.board.piece_at(i)
             if piece:
-                piece_value = {'P': 1/6.0, 'N': 2/6.0, 'B': 3/6.0, 'R': 4/6.0, 'Q': 5/6.0, 'K': 6/6.0,
-                            'p': -1/6.0, 'n': -2/6.0, 'b': -3/6.0, 'r': -4/6.0, 'q': -5/6.0, 'k': -6/6.0}[piece.symbol()]
-                board_state[i] = piece_value
+                board_state[i] = piece.piece_type / 6.0 if piece.color == chess.WHITE else -piece.piece_type / 6.0
 
-        # Get additional state information and convert to tensor
-        ep = -1
-        if self.board.ep_square is not None:
-            ep = self.board.ep_square
-            if 16 <= ep <= 23:
-                ep = ep - 16
-            elif 40 <= ep <= 47:
-                ep = ep - 40
-            ep = ep / 7.0
-        w_k_castling = int(self.board.has_kingside_castling_rights(chess.WHITE))
-        b_k_castling = int(self.board.has_kingside_castling_rights(chess.BLACK))
-        w_q_castling = int(self.board.has_queenside_castling_rights(chess.WHITE))
-        b_q_castling = int(self.board.has_queenside_castling_rights(chess.BLACK))
-        additional_state = [ep, w_k_castling, b_k_castling, w_q_castling, b_q_castling, self.board.halfmove_clock / 100.0]
-
-        return board_state, additional_state
+        return board_state
         
-    def invert(self, state, additional_state):
+    def invert_state(self, state):
         # Negate the tensor values
-        state = -state
+        inverted_state = -state
 
         # Reshape the tensor to 8x8, reverse each row, then flatten back to 1D
-        state = state.view(8, 8).flip(dims=[0]).flatten()
+        inverted_state = inverted_state.view(8, 8).flip(dims=[0]).flatten()
 
+        return inverted_state
+    
+    def invert_additional_state(self, additional_state):
         # Invert castling rights
         w_k_castling = additional_state[1]
         b_k_castling = additional_state[2]
@@ -62,15 +128,37 @@ class ChessEnvironment:
 
         inverted_additional_state = [additional_state[0], b_k_castling, w_k_castling, b_q_castling, w_q_castling, additional_state[5]]
 
-        return state, inverted_additional_state
+        return inverted_additional_state
     
-    def step(self, move):
+
+    def _make_move_on_state(self, state, move):
+        inverted_state = None
+
+        # Checking castling doesn't require inverting the board
+        if not self._check_castling(move, state):
+            # We need to invert the board before making a move if we're black
+            if self.board.turn:
+                self._move_piece_on_state(state, move)
+            else:
+                inverted_state = self.invert_state(state)
+                self._move_piece_on_state(inverted_state, move)
+
+        return inverted_state
+
+    def step(self, move, state):
         move_value = self._calculate_move_value(move)
+
         self.position_score += move_value if self.board.turn else -move_value
+
+        inverted_state = self._make_move_on_state(state, move)
+
         self.board.push(move)
         outcome = self.board.outcome(claim_draw = True)
-        new_board_state, new_additional_state = self.get_board_state()
-        new_board_state, new_additional_state = self.invert(new_board_state, new_additional_state)
+
+        # We return inverted position, perspective should always be as if the agent is white
+        new_additional_state = self.get_additional_state()
+        new_additional_state = self.invert_additional_state(new_additional_state)
+        new_board_state = self.invert_state(state) if inverted_state is None else inverted_state
         
         return new_board_state, new_additional_state, outcome
     
@@ -94,7 +182,7 @@ class ChessEnvironment:
         return 0
     
     def _calculate_move_value(self, move):
-        castle_value = self._check_castling(self.board, move)
+        castle_value = self._check_castling_value(move)
         if castle_value is not None:
             return castle_value
     
@@ -116,8 +204,8 @@ class ChessEnvironment:
             
         return value
 
-    def _check_castling(self, board, move):
-        if board.kings & chess.BB_SQUARES[move.from_square]:
+    def _check_castling_value(self, move):
+        if self.board.kings & chess.BB_SQUARES[move.from_square]:
             diff = chess.square_file(move.from_square) - chess.square_file(move.to_square)
             if abs(diff) > 1:
                 return evaluation.K_CASTLING_VALUE if diff < 0 else evaluation.Q_CASTLING_VALUE

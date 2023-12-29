@@ -13,15 +13,15 @@ def copy_model(model):
 
     return new_model
 
-def make_move(env: ChessEnvironment, model, is_deterministic = False):
-    moves_evaluations = evaluate_moves(env, model)
+def make_move(env: ChessEnvironment, model, state, is_deterministic = False):
+    moves_evaluations = evaluate_moves(env, model, state)
 
     selected_move_evaluation = None
     if is_deterministic:
         selected_move_evaluation = min(moves_evaluations, key=lambda x: x[1])
     else:
         selected_move_evaluation = softmax_selection(moves_evaluations)
-    state, additional_state, outcome = env.step(selected_move_evaluation[0])
+    state, additional_state, outcome = env.step(selected_move_evaluation[0], state)
 
     return selected_move_evaluation, state, additional_state, outcome
 
@@ -37,15 +37,19 @@ def print_8x8_tensor(tensor):
     tensor_8x8 = tensor.view(8, 8)
 
     for row in tensor_8x8:
-        print(' '.join(f'{value:.0f}' for value in row.tolist()))
+        print(' '.join(f'{value*6:.0f}' for value in row.tolist()))
 
-def evaluate_moves(env: ChessEnvironment, model: ChessAgent):
+def evaluate_moves(env: ChessEnvironment, model: ChessAgent, state):
     moves_evaluations = []
     states, add_states = [], []
     for move in env.board.legal_moves:
+        state_to_evaluate = state.clone()
+        inverted_state = env._make_move_on_state(state_to_evaluate, move)
+
         env.board.push(move)
-        board_state, additional_state = env.get_board_state()
-        board_state, additional_state = env.invert(board_state, additional_state)
+        additional_state = env.get_additional_state()
+        additional_state = env.invert_additional_state(additional_state)
+        board_state = inverted_state if inverted_state is not None else env.invert_state(state_to_evaluate)
         
         additional_state_tensor = torch.tensor(additional_state.copy(), dtype=torch.float32)
         
@@ -56,7 +60,7 @@ def evaluate_moves(env: ChessEnvironment, model: ChessAgent):
 
     evaluations = model.get_multiple_position_evaluations(states, add_states)
     for x in range(len(evaluations)):
-        moves_evaluations[x][1] = evaluations[x]
+        moves_evaluations[x][1] = evaluations[x][0]
 
     return moves_evaluations
 
@@ -84,12 +88,6 @@ def pick_random_opponent(filenames):
     # Normalize weights so that the sum equals 1
     total_weight = sum(weights)
     normalized_weights = [w / total_weight for w in weights]
-
-    # Ensure the newest model has a weight of 0.5 (50%)
-    normalized_weights[-1] = 0.5
-    remaining_weight = 1 - 0.5
-    for i in range(num_opponents - 1):
-        normalized_weights[i] *= remaining_weight
 
     # Select an opponent based on the weights
     selected_opponent = random.choices(opponents, weights=normalized_weights, k=1)[0]
@@ -167,7 +165,7 @@ def play_game(input):
     env: ChessEnvironment = input[2]
     is_switch = input[3]
 
-    env.reset()
+    state, add_state = env.reset()
 
     if is_switch:
         bot1 = opponent
@@ -178,9 +176,9 @@ def play_game(input):
 
     outcome = None
     while outcome is None:
-        _, _, _, outcome  = make_move(env, bot1, True)
+        _, _, _, outcome  = make_move(env, bot1, state, True)
         if not outcome:
-            _, _, _, outcome  = make_move(env, bot2, True)
+            _, _, _, outcome  = make_move(env, bot2, state, True)
 
     # (1 if bot1 wins, 0 if bot2 wins, 0.5 for a draw)
     game_result = env.get_game_result()
