@@ -228,14 +228,13 @@ def measure_performance():
     input = GenerateTrainingDataInput(agent_copy, env, opponent, True, alpha)
     total_steps = 0
     generate_training_data_inputs = []
+    
     for x in range(constants.THREADS):
         agent_copy = model_utilities.copy_model(agent)
         env = ChessEnvironment()
         opponent = model_utilities.copy_model(model_utilities.load_model({}, agent.name)) if x > 5 else agent_copy
         is_white = bool(x % 2)
-        generate_training_data_inputs.append(GenerateTrainingDataInput(agent_copy, env, opponent, is_white, alpha))
-
-    
+        generate_training_data_inputs.append(GenerateTrainingDataInput(agent_copy, env, opponent, is_white, alpha))    
     
     start = time.perf_counter()
     for input in generate_training_data_inputs:

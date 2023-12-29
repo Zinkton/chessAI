@@ -6,11 +6,11 @@ class ChessAgent(nn.Module):
     def __init__(self):
         super(ChessAgent, self).__init__()
         # Convolutional layers for the board
-        self.conv1 = nn.Conv2d(1, 8, kernel_size=3, stride=1, padding=1)
-        self.conv2 = nn.Conv2d(8, 16, kernel_size=3, stride=1, padding=1)
+        self.conv1 = nn.Conv2d(1, 8, kernel_size=3, stride=1, padding=2)
+        self.conv2 = nn.Conv2d(8, 16, kernel_size=3, stride=1, padding=2)
 
         # Fully connected layers for the board
-        self.fc1_board = nn.Linear(8 * 8 * 16, 128)
+        self.fc1_board = nn.Linear(16 * 12 * 12, 128)
 
         # Additional inputs layer
         self.fc1_additional = nn.Linear(6, 32)
@@ -27,7 +27,7 @@ class ChessAgent(nn.Module):
         # Process the board
         x_board = F.relu(self.conv1(board))
         x_board = F.relu(self.conv2(x_board))
-        x_board = x_board.view(-1, 8 * 8 * 16)  # Flatten
+        x_board = x_board.view(-1, 16 * 12 * 12)  # Flatten
 
         x_board = F.relu(self.fc1_board(x_board))
 
