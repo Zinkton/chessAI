@@ -1,3 +1,4 @@
+import chess
 import torch
 import random
 import os
@@ -17,10 +18,17 @@ def make_move(env: ChessEnvironment, model, state, is_deterministic = False):
     moves_evaluations = evaluate_moves(env, model, state)
 
     selected_move_evaluation = None
+    min_evaluation = min(moves_evaluations, key=lambda x: x[1])
     if is_deterministic:
-        selected_move_evaluation = min(moves_evaluations, key=lambda x: x[1])
+        selected_move_evaluation = min_evaluation
     else:
         selected_move_evaluation = softmax_selection(moves_evaluations)
+        
+    if selected_move_evaluation[1] == min_evaluation[1]:
+        selected_move_evaluation.append(True)
+    else:
+        selected_move_evaluation.append(False)
+        
     state, additional_state, outcome = env.step(selected_move_evaluation[0], state)
 
     return selected_move_evaluation, state, additional_state, outcome
@@ -155,10 +163,32 @@ def load_ratings():
 
     return ratings
 
+def load_ratings_v2():
+    ratings = {}
+    if not os.path.exists('elos_v2.txt'):
+        return ratings
+    
+    with open('elos_v2.txt', 'r+') as file:
+        for line in file:
+            name, elo = line.strip().split(' ')
+            elo = float(elo)
+            ratings[name] = elo
+
+    return ratings
+
 def save_ratings(elos):
+    keys = [int(key) for key in elos.keys()]
+    keys.sort()
     with open('elos.txt', 'w') as file:
-        for key in elos:
-            file.write(f"{key} {elos[key]}\n")
+        for key in keys:
+            file.write(f"{key} {elos[str(key)]}\n")
+
+def save_ratings_v2(elos):
+    keys = [int(key) for key in elos.keys()]
+    keys.sort()
+    with open('elos_v2.txt', 'w') as file:
+        for key in keys:
+            file.write(f"{key} {elos[str(key)]}\n")
 
 def play_game(input):
     agent: ChessAgent = input[0]
@@ -166,7 +196,7 @@ def play_game(input):
     env: ChessEnvironment = input[2]
     is_switch = input[3]
 
-    state, add_state = env.reset()
+    state, _ = env.reset()
 
     if is_switch:
         bot1 = opponent
@@ -177,13 +207,23 @@ def play_game(input):
 
     outcome = None
     while outcome is None:
-        _, _, _, outcome  = make_move(env, bot1, state, True)
+        _, state, _, outcome  = make_move(env, bot1, state, True)
         if not outcome:
-            _, _, _, outcome  = make_move(env, bot2, state, True)
+            _, state, _, outcome  = make_move(env, bot2, state, True)
 
     # (1 if bot1 wins, 0 if bot2 wins, 0.5 for a draw)
     game_result = env.get_game_result()
     if is_switch:
         game_result = 1 - game_result
+        
+    position_result = None
+    if outcome.termination == chess.Termination.CHECKMATE:
+        position_result = game_result
+    if env.position_score == 0:
+        position_result = game_result
+    elif env.position_score > 0:
+        position_result = 0 if is_switch else 1
+    else:
+        position_result = 1 if is_switch else 0
 
-    return game_result
+    return game_result, position_result

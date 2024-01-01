@@ -49,7 +49,7 @@ def generate_training_data(input: GenerateTrainingDataInput):
     
     # Opponent is white and makes first move
     if not is_white:
-        _, state_1, add_state_1, outcome = model_utilities.make_move(env, opponent, state_1.clone(), is_deterministic = not self_play)
+        _, state_1, add_state_1, outcome = model_utilities.make_move(env, opponent, state_1.clone(), is_deterministic = True)
     
     while outcome is None:
         episode_state = None
@@ -60,11 +60,11 @@ def generate_training_data(input: GenerateTrainingDataInput):
         position_score = position_score / float(piece_value[chess.KING])
 
         # Make a move and get a new state
-        state_2_eval, state_2, add_state_2, outcome = model_utilities.make_move(env, agent, state_1.clone())
+        state_2_eval, state_2, add_state_2, outcome = model_utilities.make_move(env, agent, state_1.clone(), is_deterministic = False)
 
         # ANALYZE CAREFULLY WITH SOBER BRAIN
         if outcome is None:
-            if self_play:
+            if self_play and state_2_eval[4]:
                 # We can use state_1 as training data now, because it's self play
                 episode_states.append(state_1)
                 self_play_add_state = add_state_1.copy()
@@ -80,7 +80,7 @@ def generate_training_data(input: GenerateTrainingDataInput):
             position_score = -env.position_score if is_white else env.position_score
             position_score = position_score / float(piece_value[chess.KING])
             # Opponent makes move
-            state_3_eval, state_3, add_state_3, outcome = model_utilities.make_move(env, opponent, state_2.clone(), is_deterministic = not self_play)
+            state_3_eval, state_3, add_state_3, outcome = model_utilities.make_move(env, opponent, state_2.clone(), is_deterministic = True)
             
             if outcome is None:
                 evaluation = None
@@ -175,6 +175,10 @@ def do_training():
             batch_add_states = []
             batch_targets = []
 
+            iteration_loss = 0
+            iteration_steps = 0
+            batch_steps = 0
+            iteration_start = time.perf_counter()
             while len(batch_states) < constants.BATCH_SIZE:
                 states, add_states, targets = generate_training_data_multiprocess(agent, models, constants.ALPHA)
 
@@ -203,11 +207,15 @@ def do_training():
                 optimizer.step()
 
                 # Accumulating iteration statistics
-                iteration_loss = loss.item()
+                batch_loss = loss.item()
+                iteration_loss += batch_loss
 
-                epoch_loss += iteration_loss
-                epoch_steps += len(batch_states_tensor)
-        
+                batch_steps += 1
+                iteration_steps += len(batch_states)
+
+            epoch_loss += iteration_loss
+            epoch_steps += iteration_steps
+            print(f'Iteration {iteration}, Steps per second: {iteration_steps / (time.perf_counter() - iteration_start)}, Loss {iteration_loss}')
         
         logging.info(f'Epoch {epoch}, Steps per second: {epoch_steps / (time.perf_counter() - epoch_start) }, Loss {epoch_loss / constants.ITERATIONS_PER_EPOCH}')
         epoch += 1
