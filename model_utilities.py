@@ -11,6 +11,7 @@ def copy_model(model):
     new_model.eval()
     # Copy the weights from the original model to the new one
     new_model.load_state_dict(model.state_dict())
+    new_model.name = model.name
 
     return new_model
 
@@ -150,45 +151,25 @@ def load_model(models, filename = None, agent_name = None):
 
     return model
 
-def load_ratings():
-    ratings = {}
-    if not os.path.exists('elos.txt'):
-        return ratings
+def load_values(filename):
+    values = {}
+    if not os.path.exists(filename):
+        return values
     
-    with open('elos.txt', 'r+') as file:
+    with open(filename, 'r+') as file:
         for line in file:
-            name, elo = line.strip().split(' ')
-            elo = float(elo)
-            ratings[name] = elo
+            name, value = line.strip().split(' ')
+            value = float(value)
+            values[name] = value
 
-    return ratings
+    return values
 
-def load_ratings_v2():
-    ratings = {}
-    if not os.path.exists('elos_v2.txt'):
-        return ratings
-    
-    with open('elos_v2.txt', 'r+') as file:
-        for line in file:
-            name, elo = line.strip().split(' ')
-            elo = float(elo)
-            ratings[name] = elo
-
-    return ratings
-
-def save_ratings(elos):
-    keys = [int(key) for key in elos.keys()]
+def save_values(values, filename):
+    keys = [int(key) for key in values.keys()]
     keys.sort()
-    with open('elos.txt', 'w') as file:
+    with open(filename, 'w') as file:
         for key in keys:
-            file.write(f"{key} {elos[str(key)]}\n")
-
-def save_ratings_v2(elos):
-    keys = [int(key) for key in elos.keys()]
-    keys.sort()
-    with open('elos_v2.txt', 'w') as file:
-        for key in keys:
-            file.write(f"{key} {elos[str(key)]}\n")
+            file.write(f"{key} {values[str(key)]}\n")
 
 def play_game(input):
     agent: ChessAgent = input[0]

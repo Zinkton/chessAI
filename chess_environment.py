@@ -2,11 +2,42 @@ import chess
 import torch
 import evaluation
 from evaluation import piece_value, position_value
+from typing import Tuple
 
 class ChessEnvironment:
     def __init__(self, fen = chess.Board.starting_fen):
         self.board = chess.Board(fen)
         self.position_score = 0
+
+    def get_all_move_states_targets(self, state):
+        states = []
+        add_states = []
+        targets = []
+
+        for move in self.board.legal_moves:
+            position_score = self.position_score
+            move_value = self._calculate_move_value(move)
+            
+            position_score += move_value if self.board.turn else -move_value
+
+            inverted_state = self._make_move_on_state(state, move)
+
+            self.board.push(move)
+
+            new_additional_state = self.get_additional_state()
+            new_additional_state = self.invert_additional_state(new_additional_state)
+            new_board_state = self.invert_state(state) if inverted_state is None else inverted_state
+
+            states.append(new_board_state)
+            add_states.append(new_additional_state)
+            position_score /= float(evaluation.piece_value[chess.KING])
+            if not self.board.turn:
+                position_score = -position_score
+            targets.append(position_score)
+
+            self.board.pop()
+
+        return states, add_states, targets
 
     def print_8x8_tensor(self, tensor):
         """
@@ -110,7 +141,7 @@ class ChessEnvironment:
 
         return board_state
         
-    def invert_state(self, state):
+    def invert_state(self, state) -> torch.tensor:
         # Negate the tensor values
         inverted_state = -state
 
@@ -144,16 +175,15 @@ class ChessEnvironment:
                 self._move_piece_on_state(inverted_state, move)
 
         return inverted_state
-
-    def step(self, move, state):
+    
+    def step(self, move, state) -> Tuple[torch.Tensor, list, chess.Outcome]:
         move_value = self._calculate_move_value(move)
-
         self.position_score += move_value if self.board.turn else -move_value
 
         inverted_state = self._make_move_on_state(state, move)
 
         self.board.push(move)
-        outcome = self.board.outcome(claim_draw = True)
+        outcome = self.board.outcome()
 
         # We return inverted position, perspective should always be as if the agent is white
         new_additional_state = self.get_additional_state()
@@ -166,7 +196,7 @@ class ChessEnvironment:
         return self.board.legal_moves
     
     def get_game_result(self):
-        outcome = self.board.outcome(claim_draw=True)
+        outcome = self.board.outcome()
         if outcome is not None:
             if outcome.winner == chess.WHITE:
                 return 1

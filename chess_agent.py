@@ -6,28 +6,37 @@ class ChessAgent(nn.Module):
     def __init__(self):
         super(ChessAgent, self).__init__()
         # Convolutional layers for the board
-        self.conv1 = nn.Conv2d(1, 8, kernel_size=3, stride=1, padding=2)
-        self.conv2 = nn.Conv2d(8, 16, kernel_size=3, stride=1, padding=2)
+        self.conv1 = nn.Conv2d(1, 8, kernel_size=5, stride=1, padding=2)
+        self.conv2 = nn.Conv2d(8, 16, kernel_size=5, stride=1, padding=2)
+        self.conv3 = nn.Conv2d(16, 32, kernel_size=5, stride=1, padding=2)
+
+        # 1x1 Convolution for dimension matching in residual connection
+        self.match_dimensions = nn.Conv2d(1, 32, kernel_size=1)
 
         # Fully connected layers for the board
-        self.fc1_board = nn.Linear(16 * 12 * 12, 128)
+        self.fc1_board = nn.Linear(32 * 8 * 8, 256)
 
         # Additional inputs layer
         self.fc1_additional = nn.Linear(6, 32)
 
         # Combined layers
-        self.fc2 = nn.Linear(128 + 32, 64)
-        self.out = nn.Linear(64, 1)
+        self.fc2 = nn.Linear(256 + 32, 128)
+        self.out = nn.Linear(128, 1)
 
     def forward(self, board, additional_inputs):
         # Reshape the board input to [batch_size, channels, height, width]
         # Assuming board is a flattened 8x8 board with 1 channel
         board = board.view(-1, 1, 8, 8)  # Reshape to [batch_size, 1, 8, 8]
 
-        # Process the board
+        # Process the board with residual connection
+        identity = board
         x_board = F.relu(self.conv1(board))
         x_board = F.relu(self.conv2(x_board))
-        x_board = x_board.view(-1, 16 * 12 * 12)  # Flatten
+        x_board = self.conv3(x_board)
+        identity = self.match_dimensions(identity)
+        x_board = F.relu(x_board + identity)
+
+        x_board = x_board.view(-1, 32 * 8 * 8)  # Flatten
 
         x_board = F.relu(self.fc1_board(x_board))
 

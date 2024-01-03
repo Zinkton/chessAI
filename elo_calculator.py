@@ -9,8 +9,8 @@ from chess_environment import ChessEnvironment
 class EloCalculator:
     def __init__(self, k_factor=20):
         self.k = k_factor
-        self.elos = model_utilities.load_ratings()
-        self.elos_v2 = model_utilities.load_ratings_v2()
+        self.elos = model_utilities.load_values('elos.txt')
+        self.elos_v2 = model_utilities.load_values('elos_v2.txt')
 
     def expected_score(self, rating, opponent_rating):
         return 1 / (1 + 10 ** ((opponent_rating - rating) / 400))
@@ -38,8 +38,8 @@ class EloCalculator:
                 self._update_ratings_v2(model, opponent, position_result)
         
         self._baseline_to_zero()
-        model_utilities.save_ratings(self.elos)
-        model_utilities.save_ratings_v2(self.elos_v2)
+        model_utilities.save_values(self.elos, 'elos.txt')
+        model_utilities.save_values(self.elos_v2, 'elos_v2.txt')
 
     def _update_ratings(self, bot1, bot2, result):
         bot1_new_rating = self.new_rating(self.elos.get(bot1.name, 0), self.elos.get(bot2.name, 0), result)
@@ -117,8 +117,8 @@ class EloCalculator:
                     self._update_ratings_v2(bot1, bot2, position_result)
 
         self._baseline_to_zero()
-        model_utilities.save_ratings(self.elos)
-        model_utilities.save_ratings_v2(self.elos_v2)
+        model_utilities.save_values(self.elos, 'elos.txt')
+        model_utilities.save_values(self.elos_v2, 'elos_v2.txt')
 
 if __name__ == '__main__':
     calculator = EloCalculator()

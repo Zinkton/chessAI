@@ -1,0 +1,14 @@
+INFO:root:do_training Started
+INFO:root:Epoch 0 Started, alpha: 0.99
+INFO:root:Epoch 0, Steps per second: 5537.66530520918, Loss 0.24011020817793904
+INFO:root:Epoch 1 Started, alpha: 0.98
+INFO:root:Epoch 1, Steps per second: 5807.516391121625, Loss 0.4020036629773676
+INFO:root:Epoch 2 Started, alpha: 0.97
+INFO:root:do_training Started
+INFO:root:Epoch 2 Started, alpha: 0.97
+INFO:root:Epoch 2, Steps per second: 5493.280947045876, Loss 0.49980662705376744
+INFO:root:Epoch 3 Started, alpha: 0.96
+INFO:root:Epoch 3, Steps per second: 5635.400373307552, Loss 0.44758526392281056
+INFO:root:Epoch 4 Started, alpha: 0.95
+INFO:root:Epoch 4, Steps per second: 5594.082017382905, Loss 0.38889078186824916
+INFO:root:Epoch 5 Started, alpha: 0.94

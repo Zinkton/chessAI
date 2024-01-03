@@ -1,0 +1,55 @@
+INFO:root:do_training Started
+INFO:root:Epoch 0 Started
+INFO:root:Epoch 0, Steps per second: 22419.88419633879, Loss 0.002234004108255486
+INFO:root:Epoch 1 Started
+INFO:root:Epoch 1, Steps per second: 21463.218671487663, Loss 0.001985532549699856
+INFO:root:Epoch 2 Started
+INFO:root:Epoch 2, Steps per second: 21925.749567805953, Loss 0.0016867030591482621
+INFO:root:Epoch 3 Started
+INFO:root:Epoch 3, Steps per second: 21230.852061158344, Loss 0.0018784869546402373
+INFO:root:Epoch 4 Started
+INFO:root:Epoch 4, Steps per second: 21218.74340137604, Loss 0.0018512207896210716
+INFO:root:Epoch 5 Started
+INFO:root:Epoch 5, Steps per second: 21606.215140221575, Loss 0.0016316584235504502
+INFO:root:Epoch 6 Started
+INFO:root:Epoch 6, Steps per second: 21297.384323875933, Loss 0.0015828057138934904
+INFO:root:Epoch 7 Started
+INFO:root:Epoch 7, Steps per second: 20945.492264841214, Loss 0.001682133931762593
+INFO:root:Epoch 8 Started
+INFO:root:do_training Started
+INFO:root:Epoch 8 Started
+INFO:root:do_training Started
+INFO:root:Epoch 8 Started
+INFO:root:Epoch 8, Steps per second: 23236.924039904214, Loss 0.0015601494516121982
+INFO:root:Epoch 9 Started
+INFO:root:Epoch 9, Steps per second: 21712.583417765178, Loss 0.0014468815143342214
+INFO:root:Epoch 10 Started
+INFO:root:Epoch 10, Steps per second: 20866.18383167832, Loss 0.0014428589219651429
+INFO:root:Epoch 11 Started
+INFO:root:Epoch 11, Steps per second: 20953.895530361344, Loss 0.001517955493977946
+INFO:root:Epoch 12 Started
+INFO:root:Epoch 12, Steps per second: 21240.26481281109, Loss 0.00166761216857833
+INFO:root:Epoch 13 Started
+INFO:root:Epoch 13, Steps per second: 20591.111022824643, Loss 0.0013950405637077222
+INFO:root:Epoch 14 Started
+INFO:root:Epoch 14, Steps per second: 21473.32837127689, Loss 0.001243951878810333
+INFO:root:Epoch 15 Started
+INFO:root:Epoch 15, Steps per second: 20941.04236981238, Loss 0.0012143168960871366
+INFO:root:Epoch 16 Started
+INFO:root:Epoch 16, Steps per second: 20792.199669424193, Loss 0.0012582699455028757
+INFO:root:Epoch 17 Started
+INFO:root:Epoch 17, Steps per second: 21067.37521354181, Loss 0.001305347111143451
+INFO:root:Epoch 18 Started
+INFO:root:Epoch 18, Steps per second: 21232.45486364157, Loss 0.0014700601622399004
+INFO:root:Epoch 19 Started
+INFO:root:Epoch 19, Steps per second: 21808.687669926814, Loss 0.0013399235777725343
+INFO:root:Epoch 20 Started
+INFO:root:Epoch 20, Steps per second: 21381.521674254644, Loss 0.001418427434407459
+INFO:root:Epoch 21 Started
+INFO:root:Epoch 21, Steps per second: 22569.15070323316, Loss 0.0013735526572969375
+INFO:root:Epoch 22 Started
+INFO:root:Epoch 22, Steps per second: 22548.67535913903, Loss 0.001412871490749747
+INFO:root:Epoch 23 Started
+INFO:root:Epoch 23, Steps per second: 22226.182067480684, Loss 0.001284499414427214
+INFO:root:Epoch 24 Started
+INFO:root:Epoch 24, Steps per second: 22294.65233485191, Loss 0.0012845097495067966
